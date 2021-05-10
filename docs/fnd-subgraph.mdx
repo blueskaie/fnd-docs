@@ -1,0 +1,139 @@
+---
+id: fnd-subgraph
+title: FND Subgraph
+sidebar_label: FND Subgraph
+slug: /fnd-subgraph
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+All of the data from the Foundation protocol is public and free to use.
+
+You can build your own UI with whatever features you would like using the same data.
+
+There are "subgraphs" for Foundation data on the Ethereum mainnet and the Goerli testnet.
+
+These were built using [The Graph](https://thegraph.com/). The Graph uses [GraphQL](https://graphql.org/), a query language for data.
+
+### 🌐 [mainnet subgraph](https://thegraph.com/explorer/subgraph/f8n/fnd) 🌐
+
+Our mainnet subgraph contains all the info you can find on [foundation.app](https://foundation.app). (We use it too!)
+
+### 🚧 [goerli subgraph](https://thegraph.com/explorer/subgraph/f8n/fnd-goerli) 🚧
+
+Our goerli subgraph points to the Goerli testnet - the data you'll find there contains a lot of junk, but it serves as a good testing ground.
+
+## Getting started
+
+Here's an example query using the Foundation subgraph:
+
+import ExampleQuery from './queries/example/query.mdx';
+import ExampleResult from './queries/example/result.mdx';
+
+<Tabs
+  defaultValue="query"
+  values={[
+    {label: 'Query', value: 'query'},
+    {label: 'Result', value: 'result'},
+  ]}>
+  <TabItem value="query"><ExampleQuery/></TabItem>
+  <TabItem value="result"><ExampleResult/></TabItem>
+</Tabs>
+
+:::tip
+If you learn best by checking out examples, we recommend jumping ahead to the [examples](subgraph-examples) section. If you learn better by starting with the fundamentals and building from there, please read on below.
+:::
+
+## Table structure
+
+Each of the fields in the Foundation subgraph includes a brief comment you can see on the dashboard to explain the data it holds. We aim to cross-link between entities where possible. e.g.:
+
+<img alt="Subgraph schema" src="/img/schema.png" />
+
+If there's data you need that's not easily accessible or queryable, just let us know!
+
+At a high level here is the data we store today:
+
+### User-related info
+
+#### **Account**
+
+Every address that interacts with Foundation has an associated `Account` entity.
+
+#### **Creator**
+
+Creators includes any account that has minted an NFT on the Foundation platform.
+
+### NFT-related info
+
+#### **NftContract**
+
+This entity holds any information that's common to all NFTs minted on Foundation.
+
+#### **Nft**
+
+Each individual NFT minted on Foundation. Note that NFT metadata such as name and description are not currently supported on the Foundation subgraph—in order to read this information you can read the metadata JSON from `https://ipfs.io/ipfs/${nft.tokenIPFSPath}`.
+
+For example,
+
+https://ipfs.io/ipfs/QmcsepfMDFh2udUQWtvcnZeARNFFCPA1n2WRWUH1ysWv4W/metadata.json
+
+...returns:
+
+```json
+{
+  "name":"Ancient Future",
+  "description":"Here at the nexus of infinity, we inscribe ourselves upon the sacred discs. For We are the Ancients of a Future Civilization. \n\nSingle Edition VHS Text Art by Sarah Zucker, 2020. Created in studio with Hi8 Camcorder Title Feedback, digital animation and analog processing on VHS. Filmed in 4K from vintage CRT TV screen.\n",
+  "image":"ipfs://ipfs/QmXRmfvvenqr4eJ62vjxvYqc5eWp6i2MjpkTh9VZcLiuTi/nft.mp4"
+}
+```
+
+And the image for this NFT can be retrieved from here, using the data contained in the value for the `image` key above:
+
+https://ipfs.io/ipfs/QmXRmfvvenqr4eJ62vjxvYqc5eWp6i2MjpkTh9VZcLiuTi/nft.mp4
+
+Even if it's a video, the key to use is `image`.
+
+#### **NftTransfer**
+
+Data about every transfer event for NFTs minted on Foundation.
+
+### Market-related info
+
+#### **NftAccountApproval**
+
+Tracks account-level approvals granted. For token specific approvals, see `nft.approvedSpender`.
+
+#### **NftMarketContract**
+
+Configuration that applies to all auctions listed on Foundation.
+
+#### **NftMarketAuction**
+
+Each individual auction listed on Foundation. If an auction is re-listed (after a sale or after unlisting by the seller), it will appear as a new unique auction.
+
+#### **NftMarketBid**
+
+All individual bids placed on Foundation.
+
+## The auction lifecycle
+
+Currently the only auction model we support is Reserve Auctions. More will be added in the future.
+
+### Initially listed
+
+When an NFT is initially listed, its state in the Foundation subgraph will be `nftMarketAuction.status=Open` with `nftMarketAuction.highestBid=null`.
+
+### Reserve price met
+Once the reserve price is met, `nftMarketAuction.highestBid!=null`.
+
+### End time
+Anyone can place bids on auctions until the end time has passed. So `nftMarketAuction.status=Open and nftMarketAuction.dateEnding>nowInSeconds` means an auction is accepting bids and `nftMarketAuction.status=Open and nftMarketAuction.dateEnding<=nowInSeconds` indicates that the auction countdown has completed and bids are no longer being accepted.
+
+Note that the end time for an auction may change, because placing a bit in the last 15 minutes resets the remaining time to 15 minutes to prevent sniping.
+
+### NFT claimed
+Since Ethereum requires a user-initiated transaction in order to react to the changing of time, users must claim their NFT after an auction has closed. Technically anyone can do this, but through the foundation.app UI we encourage the bidder to do so (and the foundation.app UI will allow sellers to complete the process as well). But it's on Ethereum, so anyone is free to do it if they please.
+
+Once the NFT has been claimed, the auction status changes to `nftMarketAuction.status=Finalized`. `Finalized` indicates that the NFT has been transferred to the auction winner and the seller has received funds from the sale.
